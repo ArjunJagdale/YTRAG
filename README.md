@@ -9,6 +9,13 @@ The interface is built with **Gradio** for easy interaction — no terminal know
 
 https://github.com/user-attachments/assets/0b639356-c0d6-4979-9444-95fae4e46a6c
 
+## Demo link
+[Click here for demo](https://huggingface.co/spaces/ajnx014/YT-RAG)
+
+### Note! if you see a button saying "restart this space" like below after clicking the link above, pls click it to restart the space and play with the demo
+<img width="420" height="152" alt="image" src="https://github.com/user-attachments/assets/3b777bad-ac29-4849-8dfa-0cd0d439a7ea" />
+
+
 ## 🚀 Features
 
 - **Scrape YouTube comments** from any public video  
