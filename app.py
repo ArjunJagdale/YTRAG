@@ -1,14 +1,15 @@
 import os
-import pandas as pd
 import gradio as gr
+import pandas as pd
 from youtube_comment_downloader import YoutubeCommentDownloader
-from langchain_openai import ChatOpenAI
-from langchain_community.embeddings import HuggingFaceEmbeddings
+
+from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_community.vectorstores import FAISS
-from langchain.text_splitter import RecursiveCharacterTextSplitter
+from langchain_huggingface import HuggingFaceEmbeddings
+from langchain_core.documents import Document
+from langchain_core.prompts import PromptTemplate
+from langchain_openai import ChatOpenAI
 from langchain.chains import RetrievalQA
-from langchain.docstore.document import Document
-from langchain.prompts import PromptTemplate
 
 # Initialize components
 embeddings = HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
@@ -67,8 +68,8 @@ def load_comments_to_vectorstore(video_url, max_comments, openrouter_api_key):
         # Initialize LLM with OpenRouter
         llm = ChatOpenAI(
             model="openai/gpt-3.5-turbo",
-            openai_api_key=openrouter_api_key,
-            openai_api_base="https://openrouter.ai/api/v1",
+            api_key=openrouter_api_key,
+            base_url="https://openrouter.ai/api/v1",
             temperature=0.7
         )
 
@@ -77,11 +78,8 @@ def load_comments_to_vectorstore(video_url, max_comments, openrouter_api_key):
 Pay attention to author names, comment content, and timestamps.
 When asked about specific users/authors, check if their name appears in the comments.
 Answer directly based on what you find in the context.
-
 Context: {context}
-
 Question: {question}
-
 Answer:"""
 
         PROMPT = PromptTemplate(
@@ -111,7 +109,7 @@ def chat_with_comments(question, chat_history):
         return "⚠️ Please load YouTube comments first!"
 
     try:
-        result = qa_chain({"query": question})
+        result = qa_chain.invoke({"query": question})
         answer = result["result"]
         return answer
 
@@ -178,4 +176,3 @@ with gr.Blocks(title="YouTube Comments RAG Chatbot") as demo:
 
 if __name__ == "__main__":
     demo.launch()
-
