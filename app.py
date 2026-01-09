@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""YouTube Comments RAG Agent - Improved UI"""
+"""YouTube Comments RAG Agent - With LLM Routing and Fallback"""
 
 import os
 import gradio as gr
@@ -23,6 +23,136 @@ vectorstore = None
 comments_df = None
 agent_executor = None
 memory = None
+
+# =============================================================================
+# LLM ROUTING, FALLBACK & EVAL
+# =============================================================================
+
+import time
+import csv
+from datetime import datetime
+
+EVAL_LOG_PATH = "llm_eval_logs.csv"
+
+class LLMProvider:
+    def __init__(self, name, model, api_key, base_url, temperature=0.7):
+        self.name = name
+        self.model = model
+        self.llm = ChatOpenAI(
+            model=model,
+            api_key=api_key,
+            base_url=base_url,
+            temperature=temperature
+        )
+
+    def generate(self, messages):
+        return self.llm.invoke(messages)
+
+
+class LLMRouter:
+    """
+    Simple sequential router with fallback.
+    Designed for extension to eval-driven routing.
+    
+    Routing Strategy (Current):
+    - Sequential fallback
+    - Manual heuristic selection
+
+    Evaluation:
+    - Latency
+    - Failure rate
+    - Output length
+
+    Planned:
+    - Offline eval-driven routing
+    - Cost-aware model selection
+    """
+    def __init__(self, providers):
+        self.providers = providers
+
+    def generate(self, messages):
+        last_error = None
+
+        for provider in self.providers:
+            start_time = time.time()
+            try:
+                response = provider.generate(messages)
+                latency = time.time() - start_time
+
+                self._log_eval(
+                    provider=provider.name,
+                    model=provider.model,
+                    latency=latency,
+                    success=True,
+                    output_len=len(response.content or "")
+                )
+
+                return response
+
+            except Exception as e:
+                latency = time.time() - start_time
+                last_error = e
+
+                self._log_eval(
+                    provider=provider.name,
+                    model=provider.model,
+                    latency=latency,
+                    success=False,
+                    output_len=0,
+                    error=str(e)
+                )
+
+        raise RuntimeError(f"All LLM providers failed. Last error: {last_error}")
+
+    def _log_eval(self, provider, model, latency, success, output_len, error=None):
+        file_exists = os.path.isfile(EVAL_LOG_PATH)
+
+        with open(EVAL_LOG_PATH, mode="a", newline="", encoding="utf-8") as f:
+            writer = csv.writer(f)
+            if not file_exists:
+                writer.writerow([
+                    "timestamp",
+                    "provider",
+                    "model",
+                    "latency_sec",
+                    "success",
+                    "output_length",
+                    "error"
+                ])
+
+            writer.writerow([
+                datetime.utcnow().isoformat(),
+                provider,
+                model,
+                round(latency, 3),
+                success,
+                output_len,
+                error
+            ])
+
+
+from langchain_core.language_models.chat_models import BaseChatModel
+from langchain_core.messages import BaseMessage
+from langchain_core.outputs import ChatGeneration, ChatResult
+
+class RoutedChatModel(BaseChatModel):
+    """Adapter to make LLMRouter compatible with LangChain agents"""
+    router: LLMRouter
+
+    @property
+    def _llm_type(self) -> str:
+        return "routed-openrouter"
+
+    def _generate(self, messages, stop=None, run_manager=None, **kwargs):
+        response = self.router.generate(messages)
+        # Wrap response in ChatResult format expected by LangChain
+        generation = ChatGeneration(message=response)
+        return ChatResult(generations=[generation])
+
+
+# =============================================================================
+# YOUTUBE SCRAPER
+# =============================================================================
 
 def scrape_youtube_comments(video_url, max_comments=500):
     """Scrape YouTube comments using youtube-comment-downloader"""
@@ -178,13 +308,22 @@ def load_comments_to_vectorstore(video_url, max_comments, openrouter_api_key):
         # Create vector store
         vectorstore = FAISS.from_documents(splits, embeddings)
 
-        # Initialize LLM
-        llm = ChatOpenAI(
+        # Initialize LLM providers (Primary + Fallback)
+        primary_provider = LLMProvider(
+            name="openrouter-primary",
             model="openai/gpt-4o-mini",
             api_key=openrouter_api_key,
-            base_url="https://openrouter.ai/api/v1",
-            temperature=0.7
+            base_url="https://openrouter.ai/api/v1"
         )
+
+        fallback_provider = LLMProvider(
+            name="openrouter-fallback",
+            model="mistralai/mistral-7b-instruct",
+            api_key=openrouter_api_key,
+            base_url="https://openrouter.ai/api/v1"
+        )
+
+        router = LLMRouter(providers=[primary_provider, fallback_provider])
 
         # Create tools
         tools = [
@@ -241,8 +380,11 @@ Remember: You're analyzing HUMAN COMMUNICATION. Think beyond literal keywords an
             MessagesPlaceholder(variable_name="agent_scratchpad")
         ])
 
-        # Create agent
-        agent = create_tool_calling_agent(llm, tools, prompt)
+        # Create routed LLM wrapper
+        routed_llm = RoutedChatModel(router=router)
+
+        # Create agent with routed LLM
+        agent = create_tool_calling_agent(routed_llm, tools, prompt)
 
         # Create agent executor
         agent_executor = AgentExecutor(
@@ -255,7 +397,7 @@ Remember: You're analyzing HUMAN COMMUNICATION. Think beyond literal keywords an
             early_stopping_method="generate"
         )
 
-        return f"✅ Loaded {len(df)} comments successfully! Agent initialized with 3 tools for comprehensive analysis.", df
+        return f"✅ Loaded {len(df)} comments successfully! Agent initialized with LLM routing and fallback.", df
 
     except Exception as e:
         return f"❌ Error: {str(e)}", None
@@ -439,7 +581,7 @@ with gr.Blocks(title="YouTube Comments RAG Agent", theme=gr.themes.Soft(), css="
     # Footer
     gr.Markdown("""
     <div style="text-align: center; padding: 20px; color: #666;">
-        <p><strong>Powered by:</strong> LangChain • OpenRouter • FAISS • HuggingFace Embeddings</p>
+        <p><strong>Powered by:</strong> LangChain • OpenRouter (with routing & fallback) • FAISS • HuggingFace Embeddings</p>
     </div>
     """)
     
