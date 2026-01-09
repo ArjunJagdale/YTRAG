@@ -115,11 +115,13 @@ pip install -r requirements.txt
 ### Dependencies
 ```txt
 langchain==0.3.27
-langchain-openai==0.3.11
+langchain-core==0.3.76
 langchain-community==0.3.29
-langchain-huggingface
+langchain-openai==0.3.11
+langchain-text-splitters==0.3.11
 youtube-comment-downloader
 gradio
+langchain-huggingface
 faiss-cpu
 sentence-transformers
 pandas
