@@ -1,224 +1,125 @@
-# 🧠 YouTube Comments RAG Agent
+# 🎥 YouTube Comments RAG Agent
 
-### Retrieve • Understand • Analyze YouTube Conversations with a LangChain-Powered AI Agent
+**Retrieve • Understand • Analyze YouTube Conversations with AI**
 
-This project is an end-to-end **Retrieval-Augmented Generation (RAG)** system built for analyzing YouTube comments in a deeply semantic way.
-It scrapes comments, embeds them, loads them into a vector store, and allows an intelligent agent to retrieve + reason over them using natural language queries.
-
-The UI is powered by **Gradio**, while the retrieval, memory, prompting, and agent orchestration is handled by **LangChain**.
+A production-grade RAG (Retrieval-Augmented Generation) system for intelligent analysis of YouTube comments through natural language queries. Built with LangChain, OpenRouter, and FAISS vector search.
 
 ---
-# Demo
+
+## 📺 Demo
 
 https://github.com/user-attachments/assets/a8dd7f90-06d3-4114-917d-11600d90a902
 
 ---
 
-# 🚀 Features
+## 🎯 Architecture Overview
 
-* **Scrape YouTube comments** (up to 500) using `youtube-comment-downloader`
-* **Convert comments into LangChain documents** and chunk them semantically
-* **Embed text using HuggingFace MiniLM** and store vectors in FAISS
-* **Query comments using natural language**, not keywords
-* **Agent with tools** for:
+```
+YouTube Comments → Document Processing → Vector Embeddings → FAISS Index → Agent Reasoning → Natural Language Answers
+```
 
-  * Searching by author
-  * Searching by keyword
-  * Retrieving all comments for holistic analysis
-* **Conversational memory** so the agent remembers context over multiple queries
-* **OpenRouter LLM integration** for cost-effective GPT-based inference
-* **Clean UI** for loading, previewing, and chatting with comment data
-
----
-
-# 🧩 How It Works (Technical Overview)
-
-## 1. 🔍 Scraping Layer
-
-Comments are fetched using **youtube-comment-downloader**, capturing:
-
-* author
-* comment text
-* timestamp
-
-They are loaded into a `pandas` DataFrame and stored globally.
+**Complete RAG Pipeline:**
+1. **Scrape** comments using `youtube-comment-downloader`
+2. **Chunk** documents semantically with `RecursiveCharacterTextSplitter`
+3. **Embed** using HuggingFace `all-MiniLM-L6-v2`
+4. **Store** in FAISS for fast similarity search
+5. **Retrieve** via hybrid tools + vector search
+6. **Generate** contextual answers with LangChain agents
 
 ---
 
-## 2. 📄 Document Creation & Chunking (LangChain)
+## 🚀 Key Features
 
-Each comment is converted into a **LangChain `Document`** with metadata:
+### 1. **LLM Routing & Fallback System**
+Production-ready infrastructure for model resilience:
 
 ```python
-Document(
-  page_content="Author: ... Comment: ... Time: ...",
-  metadata={"author": ..., "time": ...}
-)
+Primary Model → Automatic Fallback → Secondary Model
+       ↓
+Evaluation Logging (CSV)
 ```
 
-These documents are then split using:
+- **Sequential Routing**: Auto-fallback on failure (gpt-4o-mini → mistral-7b)
+- **Observability**: Logs latency, success rate, output metrics for every request
+- **Future-Ready**: Architected for eval-driven routing and cost-aware selection
 
-**`RecursiveCharacterTextSplitter`**
-
-* chunk size: `1000`
-* overlap: `100`
-* hierarchical splitting rules for cleaner semantic units
-
-This makes them suitable for high-quality retrieval.
-
----
-
-## 3. 🧬 Embeddings (HuggingFace)
-
-Embeddings are generated using:
-
-**`HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")`**
-
-Why?
-
-* Fast
-* Lightweight
-* High quality for semantic similarity
-* Works offline / no paid API
-
-*HuggingFace is not the orchestrator — it simply powers the embedding step.*
+**Evaluation Metrics (logged to `llm_eval_logs.csv`):**
+- Request latency
+- Success/failure status
+- Output token length
+- Error traces
 
 ---
 
-## 4. 📚 Vector Store (FAISS)
+### 2. **Hybrid Retrieval System**
+Combines vector search with structured tools:
 
-All chunk embeddings are stored in a **FAISS vector store**, enabling:
+| Tool | Purpose |
+|------|---------|
+| `search_comments_by_author()` | Find all comments by specific user |
+| `search_comments_by_keyword()` | Search by terms/phrases |
+| `get_all_comments()` | Retrieve full dataset for holistic analysis |
 
-* fast similarity search
-* dense retrieval
-* robust matching beyond keywords
-
-LangChain’s vectorstore abstraction wraps FAISS, making querying seamless.
-
----
-
-## 5. 🛠️ Tooling Layer (LangChain Tools)
-
-Three custom tools are exposed to the agent:
-
-1. `search_comments_by_author(author_name)`
-2. `search_comments_by_keyword(keyword)`
-3. `get_all_comments(limit=100)`
-
-LangChain registers these as **runnable tools**, enabling the agent to decide:
-
-* when to call a tool
-* which tool to call
-* how to use tool outputs in reasoning
-
-This is true *agentic behavior*, not simple prompt chaining.
+**Why Hybrid?** Vector search misses exact matches; tools ensure precision alongside semantic understanding.
 
 ---
 
-## 6. 🧠 Agent + Memory (LangChain)
+### 3. **Intelligent Agent System**
+LangChain agent with tool orchestration:
 
-A **Tool-Calling Agent** is created via:
+- **Conversational Memory**: Multi-turn context awareness
+- **Tool Selection**: Auto-chooses optimal retrieval strategy
+- **Error Handling**: Graceful degradation with retry logic
+- **Smart Analysis**: Understands sentiment, tone, intent beyond keywords
 
-```
-create_tool_calling_agent()
-```
-
-Backed by:
-
-* **ConversationBufferMemory** (chat history persistence)
-* **ChatPromptTemplate** (system + user + memory + scratchpad)
-* **OpenRouter GPT-4o-mini** as the LLM backend
-
-The agent chooses retrieval strategies automatically:
-
-* Direct lookup (if query mentions specific authors/keywords)
-* Holistic reading (via `get_all_comments`)
-* Tool sequences (multi-step reasoning)
+**Agent Capabilities:**
+- Identifies questions, explanations, complaints without keyword reliance
+- Synthesizes multi-source information
+- Provides evidence-backed structured analysis
 
 ---
 
-## 7. 💬 Natural-Language Interaction
+## 🛠️ Technical Stack
 
-Users can ask:
-
-* “What are people complaining about?”
-* “Any helpful explanations in the comments?”
-* “Show me sarcastic reactions”
-* “What themes dominate the discussion?”
-* “Did someone ask a question?”
-
-The agent:
-
-1. Retrieves relevant chunks from FAISS
-2. Calls tools where needed
-3. Synthesizes a reasoning-rich answer via OpenRouter
+| Component | Technology | Purpose |
+|-----------|-----------|---------|
+| **LLM Provider** | OpenRouter | Multi-model access + routing |
+| **Vector Store** | FAISS | High-speed similarity search |
+| **Embeddings** | HuggingFace `all-MiniLM-L6-v2` | Semantic text representation |
+| **Agent Framework** | LangChain | Tool orchestration + memory |
+| **UI** | Gradio | Interactive web interface |
+| **Data Source** | `youtube-comment-downloader` | Comment extraction |
 
 ---
 
-## 8. 🖥️ Frontend (Gradio)
+## 📦 Installation
 
-A polished UI with three stages:
+### Prerequisites
+- Python 3.8+
+- OpenRouter API key ([get one here](https://openrouter.ai/))
 
-1. **Load Comments & Initialize Agent**
-2. **Preview Comments**
-3. **Interact with the RAG Agent**
-
-This keeps the workflow simple and intuitive.
-
----
-
-# 🛠️ Installation
-
-### 1. Clone the repo
+### Setup
 
 ```bash
-git clone <repo-url>
-cd <project>
-```
+# Clone repository
+git clone https://github.com/ArjunJagdale/YTRAG.git
+cd YTRAG
 
-### 2. Install dependencies
-
-```
+# Install dependencies
 pip install -r requirements.txt
+
+# Add your OpenRouter API key
+# (paste directly in the UI when launching)
 ```
 
-### 3. Run the app
-
-```
-python app.py
-```
-
----
-
-# 🔑 API Key (OpenRouter)
-
-To use GPT-4o-mini or any model via OpenRouter, set:
-
-```
-sk-or-v1-xxxxxxxxxxx
-```
-
-OpenRouter provides:
-
-* multi-provider unified API
-* cheaper GPT-style models
-* rate-limit transparency
-
-*They power inference — LangChain handles orchestration.*
-
----
-
-# 📦 Requirements
-
-```
+### Dependencies
+```txt
 langchain==0.3.27
-langchain-core==0.3.76
-langchain-community==0.3.29
 langchain-openai==0.3.11
-langchain-text-splitters==0.3.11
+langchain-community==0.3.29
+langchain-huggingface
 youtube-comment-downloader
 gradio
-langchain-huggingface
 faiss-cpu
 sentence-transformers
 pandas
@@ -226,53 +127,131 @@ pandas
 
 ---
 
-# 🧪 Architecture Overview
+## 🎮 Usage
+
+### Launch
+```bash
+python app.py
+```
+
+Interface opens at `http://localhost:7860`
+
+### Workflow
+
+**Step 1: Load Comments**
+1. Enter OpenRouter API key
+2. Paste YouTube URL
+3. Set max comments (10-500)
+4. Click "Load Comments & Initialize Agent"
+
+**What Happens:**
+- Comments scraped and converted to LangChain Documents
+- Text chunked (1000-char chunks, 100-char overlap)
+- Embedded using `all-MiniLM-L6-v2`
+- FAISS index built
+- Agent initialized with routing + tools
+
+**Step 2: Query with Natural Language**
 
 ```
-          ┌──────────────────────────┐
-          │  YouTube Comment Scraper │
-          └─────────────┬────────────┘
-                        ▼
-             Pandas DataFrame
-                        ▼
-      ┌──────────────────────────────────┐
-      │    LangChain Document Layer      │
-      └──────────────────────────────────┘
-                        ▼
-      RecursiveCharacterTextSplitter
-                        ▼
-                HF MiniLM Embeddings
-                        ▼
-                   FAISS Vector DB
-                        ▼
-     ┌──────────────────────────────────┐
-     │      LangChain Agent System      │
-     │  - Tools                         │
-     │  - Memory                        │
-     │  - OpenRouter LLM                │
-     └──────────────────────────────────┘
-                        ▼
-                 Natural Language Answers
+"What's the overall sentiment?"
+"Has anyone asked questions?"
+"Show me detailed explanations"
+"Find complaints about X"
+"What topics are most discussed?"
 ```
 
 ---
 
-# 🏁 Summary
+## 🏗️ Technical Deep Dive
 
-This system combines:
+### Document Processing
 
-### LangChain — the brain
+**Chunking Strategy:**
+- **Size**: 1000 chars (balances context vs. precision)
+- **Overlap**: 100 chars (prevents boundary info loss)
+- **Separators**: `["\n\nAuthor:", "\n\n", "\n", " "]` (semantic boundaries)
 
-Document pipelines, retrieval abstraction, tool-based agent reasoning, memory, orchestration
+**Why all-MiniLM-L6-v2?**
+- 14,000+ tokens/sec inference
+- 384-dim embeddings with strong semantic capture
+- 80MB model (local, no API costs)
 
-### HuggingFace — the muscle
+### LLM Routing Architecture
 
-Embeddings for vector similarity
+```python
+class LLMRouter:
+    """Sequential router with evaluation hooks"""
+    def generate(self, messages):
+        for provider in self.providers:
+            try:
+                response = provider.generate(messages)
+                self._log_eval(success=True, latency=...)
+                return response
+            except:
+                self._log_eval(success=False, ...)
+        raise RuntimeError("All providers failed")
+```
 
-### OpenRouter — the voice
+**Routing Strategy (Current):**
+- Sequential fallback
+- Manual heuristic selection
 
-LLM reasoning & natural language dialog
-
-Together, they form a practical, flexible, and elegant RAG workflow specialized for YouTube comment analysis.
+**Planned:**
+- Eval-driven routing
+- Cost-aware model selection
+- Query complexity-based routing
 
 ---
+
+## 📈 Evaluation & Monitoring
+
+### Performance Analysis
+```python
+import pandas as pd
+
+logs = pd.read_csv('llm_eval_logs.csv')
+
+# Success rate by provider
+logs.groupby('provider')['success'].mean()
+
+# Average latency
+logs[logs['success'] == True]['latency_sec'].mean()
+
+# Failure patterns
+logs[logs['success'] == False]['error'].value_counts()
+```
+
+---
+
+## 🔮 Roadmap
+
+- [ ] Eval-driven routing based on query complexity
+- [ ] Cost tracking per request
+- [ ] Response streaming for long-form analysis
+- [ ] Multi-video comparison
+- [ ] Temporal sentiment tracking
+
+---
+
+## 🎓 Resources
+
+- [LangChain RAG Guide](https://python.langchain.com/docs/use_cases/question_answering/)
+- [FAISS Documentation](https://faiss.ai/)
+- [OpenRouter API Docs](https://openrouter.ai/docs)
+
+---
+
+## 📝 License
+
+MIT License
+
+---
+
+## 🙏 Acknowledgments
+
+Built with [LangChain](https://www.langchain.com/) • [OpenRouter](https://openrouter.ai/) • [FAISS](https://faiss.ai/) • [HuggingFace](https://huggingface.co/) • [Gradio](https://gradio.app/)
+
+---
+
+**For questions or feedback:** [Open an issue](https://github.com/ArjunJagdale/YTRAG/issues)
