@@ -5,6 +5,12 @@
 Ask questions about any YouTube video and get answers grounded in the actual transcript — with exact timestamps.
 
 ---
+## Demo
+> Input - OPENROUTER API | YT URL | QUESTION
+>
+> <img width="1115" height="599" alt="image" src="https://github.com/user-attachments/assets/c03229c0-f768-4498-964c-990640fb648c" />
+>
+> OUTPUT - ANSWER GENERATED BASED ON TRANSCRIPT
 
 ## What It Does
 
