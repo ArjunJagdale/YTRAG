@@ -80,9 +80,9 @@ def bake_timestamps(segments: list[dict]) -> str:
 
 def build_chunks(text: str) -> list[Document]:
     splitter = RecursiveCharacterTextSplitter(
-        chunk_size    = 800,
+        chunk_size = 800,
         chunk_overlap = 200,
-        separators    = ["\n\n", "\n", "] ", " ", ""]
+        separators = ["\n\n", "\n", "] ", " ", ""]
     )
     return splitter.create_documents([text])
 
@@ -107,7 +107,7 @@ def format_docs(docs: list[Document]) -> str:
 
 def build_rag_chain(index: FAISS, api_key: str):
     retriever = index.as_retriever(
-        search_type   = "mmr",
+        search_type = "mmr",
         search_kwargs = {"k": 4, "fetch_k": 10}
     )
 
@@ -123,10 +123,10 @@ def build_rag_chain(index: FAISS, api_key: str):
     ])
 
     llm = ChatOpenAI(
-        model           = "openai/gpt-4o-mini",
-        temperature     = 0,
-        max_tokens      = 512,
-        openai_api_key  = api_key,
+        model = "openai/gpt-4o-mini",
+        temperature = 0,
+        max_tokens = 512,
+        openai_api_key = api_key,
         openai_api_base = "https://openrouter.ai/api/v1"
     )
 
@@ -160,14 +160,14 @@ def answer_question(youtube_url: str, question: str, api_key: str) -> str:
     except Exception as e:
         return f"Could not fetch transcript: {e}"
 
-    text      = bake_timestamps(segments)
+    text = bake_timestamps(segments)
     documents = build_chunks(text)
-    index     = build_index(documents)
-    chain     = build_rag_chain(index, api_key)
+    index = build_index(documents)
+    chain= build_rag_chain(index, api_key)
 
     # debug — print retrieved chunks to CLI
     retriever = index.as_retriever(
-        search_type   = "mmr",
+        search_type = "mmr",
         search_kwargs = {"k": 4, "fetch_k": 10}
     )
     retrieved = retriever.invoke(question)
@@ -202,18 +202,18 @@ def launch():
         with gr.Row():
             with gr.Column(scale=1):
                 url_input = gr.Textbox(
-                    label       = "YouTube URL",
+                    label = "YouTube URL",
                     placeholder = "https://www.youtube.com/watch?v=..."
                 )
                 key_input = gr.Textbox(
-                    label       = "OpenRouter API Key",
+                    label = "OpenRouter API Key",
                     placeholder = "sk-or-...",
-                    type        = "password"
+                    type = "password"
                 )
                 question_input = gr.Textbox(
-                    label       = "Question",
+                    label = "Question",
                     placeholder = "What does the speaker say about X?",
-                    lines       = 3
+                    lines = 3
                 )
                 submit_btn = gr.Button("Ask", variant="primary")
 
@@ -224,8 +224,8 @@ def launch():
                 )
 
         submit_btn.click(
-            fn      = answer_question,
-            inputs  = [url_input, question_input, key_input],
+            fn = answer_question,
+            inputs = [url_input, question_input, key_input],
             outputs = answer_output
         )
 
