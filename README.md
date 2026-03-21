@@ -1,183 +1,67 @@
-# YT-RAG
+# YouTube Transcript RAG QA
 
-**Retrieval-Augmented Generation for YouTube videos using LangChain**
-
-Ask questions about any YouTube video and get answers grounded in the actual transcript — with exact timestamps.
-
----
-## Demo
-> Input - OPENROUTER API | YT URL | QUESTION
->
-> <img width="1115" height="599" alt="image" src="https://github.com/user-attachments/assets/c03229c0-f768-4498-964c-990640fb648c" />
->
-> OUTPUT - ANSWER GENERATED BASED ON TRANSCRIPT
-
-## What It Does
-
-Input: YouTube URL + Question  
-Output: Answer based **only** on retrieved transcript chunks
-
-No hallucinations. No guessing. Pure RAG.
+Ask questions about any YouTube video. Answers are grounded in the transcript and include timestamps so you can verify exactly where in the video the information comes from.
 
 ---
 
-## How We Built RAG with LangChain
+## How it works
 
 ```
-Ingest → Chunk → Embed → Store → Retrieve → Prompt → Generate
+YouTube URL → Extract video ID → Fetch transcript → Custom chunker →
+HuggingFace embeddings → FAISS index → MMR retrieval → GPT-4o-mini → Answer with timestamps
 ```
 
-### 1. **Ingest** — Fetch Transcript
-```python
-from youtube_transcript_api import YouTubeTranscriptApi
-
-segments = fetch_transcript(youtube_url)
-# Returns: [{"text": "...", "start": 0.0, "duration": 2.5}, ...]
-```
-
-### 2. **Chunk** — Timestamp-Aware Splitting
-```python
-from langchain.schema import Document
-
-documents = build_chunks(segments, max_chars=500)
-# Returns: Document(page_content="...", metadata={"start_time": 0, "end_time": 15})
-```
-
-We don't use `RecursiveCharacterTextSplitter` because we need **custom logic** to preserve timestamps while chunking.
-
-### 3. **Embed** — Generate Vectors
-```python
-from langchain_openai import OpenAIEmbeddings
-
-embeddings = OpenAIEmbeddings(
-    model="text-embedding-3-small",
-    api_key=api_key,
-    base_url="https://openrouter.ai/api/v1"
-)
-```
-
-LangChain handles the embedding API calls and batch processing.
-
-### 4. **Store** — Vector Database
-```python
-from langchain.vectorstores import FAISS
-
-vectorstore = FAISS.from_documents(
-    documents=documents,
-    embedding=embeddings
-)
-```
-
-FAISS (via LangChain) stores embeddings for fast similarity search.
-
-### 5. **Retrieve** — Semantic Search
-```python
-retriever = vectorstore.as_retriever(search_kwargs={"k": 4})
-docs = retriever.get_relevant_documents(question)
-```
-
-LangChain's retriever interface makes it easy to swap search strategies.
-
-### 6. **Prompt** — Context Injection
-```python
-from langchain.prompts import ChatPromptTemplate
-
-PROMPT = ChatPromptTemplate.from_template("""
-You are answering questions about a YouTube video.
-Use ONLY the retrieved transcript chunks below.
-
-Transcript chunks:
-{context}
-
-Question:
-{question}
-""")
-
-messages = PROMPT.format_messages(context=context, question=question)
-```
-
-Retrieved chunks are formatted with timestamps and injected into the prompt.
-
-### 7. **Generate** — LLM Response
-```python
-from langchain_openai import ChatOpenAI
-
-llm = ChatOpenAI(
-    model="openai/gpt-4o-mini",
-    api_key=api_key,
-    base_url="https://openrouter.ai/api/v1"
-)
-
-response = llm.invoke(messages)
-```
-
-LangChain abstracts the LLM API call and response parsing.
+The transcript is split into chunks that preserve start and end timestamps. When you ask a question, the most relevant chunks are retrieved from FAISS and passed to the LLM with their timestamps already embedded in the context — so the model can reference them naturally in its answer.
 
 ---
 
-## Why LangChain?
+## Setup
 
-LangChain provides:
-- **`Document` abstraction** — standardized text + metadata handling
-- **Embedding interface** — swap models without rewriting code
-- **Vector store integration** — FAISS, Pinecone, Chroma, etc.
-- **Retriever pattern** — clean separation of search logic
-- **Prompt templates** — reusable, testable prompt engineering
-
-Result: **Modular, inspectable, production-ready RAG**.
-
----
-
-## Run It
-
-### Local
+**Install dependencies:**
 ```bash
-pip install -r requirements.txt
-python app.py
+pip install langchain langchain-community langchain-openai \
+            sentence-transformers faiss-cpu \
+            youtube-transcript-api gradio
 ```
 
-### Google Colab
+**Run:**
 ```bash
-!pip install langchain langchain-community langchain-openai youtube-transcript-api faiss-cpu gradio
-# Then run youtube_rag_qa_colab.py
+python yt_rag.py
 ```
 
-Get your **OpenRouter API key** at [openrouter.ai](https://openrouter.ai)
+Then open `http://localhost:7860` in your browser.
 
 ---
 
-## 🛠️ Tech Stack
+## Usage
 
-- **LangChain** — RAG orchestration
-- **OpenRouter** — LLM + embeddings API
-- **FAISS** — vector store
-- **YouTube Transcript API** — data ingestion
-- **Gradio** — UI
+1. Paste any YouTube URL — standard, short (`youtu.be`), shorts, or embed format
+2. Enter your [OpenRouter](https://openrouter.ai) API key
+3. Type your question and click **Ask**
 
----
-
-## Key Design Decisions
-
- **Timestamp preservation** — Custom chunking logic maintains exact timing metadata  
- **Retrieval-only answers** — LLM can't hallucinate; it only uses retrieved context  
- **No caching** — Each query re-processes the video (trade-off for simplicity)  
- **LangChain abstractions** — Makes the system extensible and testable  
+> Note: The video must have captions enabled. Most popular videos do. The embedding model (`all-MiniLM-L6-v2`) downloads once on first run (~90MB) and is cached after that.
 
 ---
 
-## Example
+## Screenshots
 
-**URL:** `https://youtu.be/0bUieoJ6FI4?si=09lUFlLLX-tnKKZV`  
-**Question:** "for roasted veg, lentil % Chickpea bowl, what temperature to consider for pre heating? also tell me more about the ingredients!"  
-**Answer:**
-> For the roasted vegetable, chickpea, and lentil bowl, you should preheat your oven to 400°F. The ingredients include half a cauliflower, various vegetables that are roasted to enhance their sweetness and juiciness, black lentils which are high in protein and fiber...
+**In-context question — answer with timestamps:**
+<img width="1854" height="874" alt="Screenshot 2026-03-21 123829" src="https://github.com/user-attachments/assets/f53c9b53-9762-4f9d-b770-e5f0b9e8fdae" />
 
 ---
 
-## License
-
-MIT
+**Out-of-context question — model says it doesn't know:**
+<img width="1833" height="872" alt="Screenshot 2026-03-21 124227" src="https://github.com/user-attachments/assets/c52b924f-5098-42bd-b50f-170f071e5e2a" />
 
 ---
 
-**Built by [ArjunJagdale](https://github.com/ArjunJagdale)**
+## Stack
+
+| Component | Library |
+|---|---|
+| Transcript fetch | `youtube-transcript-api` |
+| Embeddings | `sentence-transformers/all-MiniLM-L6-v2` |
+| Vector store | FAISS |
+| LLM | GPT-4o-mini via OpenRouter |
+| Chain | LangChain LCEL |
+| UI | Gradio |
