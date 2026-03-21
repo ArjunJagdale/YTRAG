@@ -2,6 +2,24 @@
 
 Ask questions about any YouTube video. Answers are grounded in the transcript and include timestamps so you can verify exactly where in the video the information comes from.
 
+## Quick Flow
+```
+User types: "What helped the speaker sleep better?"
+                        ↓
+          retriever.invoke(question)
+          embeds the question → searches FAISS → finds 4 nearest vectors
+          fetches the 4 Documents from docstore (text + metadata both come back)
+                        ↓
+          RunnableLambda(format_docs) runs HERE
+          receives those 4 Documents
+          reads metadata["start_time"] and metadata["end_time"] from each
+          injects timestamps into page_content as plain text:
+          "[0:00 - 0:42] hi friends today I'm going to share with..."
+                        ↓
+          this timestamped string fills {context} in the prompt
+                        ↓
+          LLM receives it as plain text and references timestamps in its answer
+```
 ---
 
 ## How it works
