@@ -57,7 +57,7 @@ def bake_timestamps(segments: list[dict]) -> str:
     for seg in segments:
         ts = sec_to_mmss(seg["start"])
         parts.append(f"[{ts}] {seg['text']}")
-    return " ".join(parts)
+    return "\n".join(parts)
 
 
 # =============================================================================
