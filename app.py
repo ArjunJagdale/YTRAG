@@ -34,20 +34,6 @@ def extract_video_id(url: str) -> str:
     if "youtu.be" in url:
         return url.split("/")[-1].split("?")[0]
 
-    parsed = urlparse(url)
-
-    if parsed.query:
-        qs = parse_qs(parsed.query)
-        if "v" in qs:
-            return qs["v"][0]
-
-    match = re.search(r"/(shorts|embed)/([^/?]+)", parsed.path)
-    if match:
-        return match.group(2)
-
-    raise ValueError("Could not extract video ID from the provided URL.")
-
-
 # =============================================================================
 # STEP 2 — FETCH TRANSCRIPT
 # =============================================================================
@@ -108,7 +94,7 @@ def format_docs(docs: list[Document]) -> str:
 def build_rag_chain(index: FAISS, api_key: str):
     retriever = index.as_retriever(
         search_type = "mmr",
-        search_kwargs = {"k": 4, "fetch_k": 10}
+        search_kwargs = {"k": 4, "fetch_k": 10, "lambda_mult": 0.7},
     )
 
     prompt = ChatPromptTemplate.from_messages([
