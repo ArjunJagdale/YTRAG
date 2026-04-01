@@ -68,7 +68,7 @@ def build_chunks(text: str) -> list[Document]:
     splitter = RecursiveCharacterTextSplitter(
         chunk_size = 800,
         chunk_overlap = 200,
-        separators = ["\n\n", "\n", "] ", " ", ""]
+        separators = ["\n\n", "\n", " ", ""]
     )
     return splitter.create_documents([text])
 
